@@ -7,6 +7,9 @@ from gensim import corpora
 from gensim import matutils as mtutils
 from sklearn import linear_model as lm
 
+
+###########LOAD & FIT Learn
+
 fname = "data/chiracLearn"
 
 nblignes = compteLignes(fname)
@@ -44,8 +47,8 @@ dictionary = corpora.Dictionary(re.split(splitters, doc.lower()) for doc in allt
 
 print len(dictionary)
 
-stop_ids = [dictionary.token2id[stopword] for stopword in stoplist   if stopword in dictionary.token2id]
-once_ids = [tokenid for tokenid, docfreq in dictionary.dfs.iteritems() if docfreq < 10 ]
+stop_ids = [dictionary.token2id[stopword] for stopword in stoplist  if stopword in dictionary.token2id]
+once_ids = [tokenid for tokenid, docfreq in dictionary.dfs.iteritems() if docfreq < 2 ]
 dictionary.filter_tokens(stop_ids + once_ids) # remove stop words and words that appear only once
 dictionary.compactify() # remove gaps in id sequence after words that were removed
 
@@ -66,8 +69,61 @@ labels = labs
 
 vecteurs = vecteurs.T
 
-classifier = lm.Perceptron(penalty=None, alpha=0.0001, fit_intercept=True, n_iter=5, shuffle=False, verbose=0, eta0=1.0, n_jobs=1, class_weight=None, warm_start=False)
+classifier = lm.Perceptron(penalty=None, alpha=0.0001, fit_intercept=True, n_iter=10, shuffle=True, verbose=0, eta0=1.0, n_jobs=7, class_weight=None, warm_start=False)
 classifier.fit(vecteurs,labels)
+
+####Load & Test
+fname = "data/chiracTest"
+
+nblignesTest = compteLignes(fname)
+print "nblignes = %d"%nblignes
+
+alltxts = []
+labs = np.ones(nblignesTest)
+s=codecs.open(fname, 'r','utf-8') # pour régler le codage
+
+cpt = 0
+for i in range(nblignesTest):
+    txt = s.readline()
+    #print txt
+
+    lab = re.sub(r"<[0-9]*:[0-9]*:(.)>.*","\\1",txt)
+    txt = re.sub(r"<[0-9]*:[0-9]*:.>(.*)","\\1",txt)
+
+    #assert(lab == "C" or lab == "M")
+
+    if lab.count('M') >0:
+        labs[cpt] = -1
+    alltxts.append(txt)
+
+    cpt += 1
+    if cpt %1000 ==0:
+        print cpt
+
+
+texts = [[word for word in re.split(splitters, document.lower()) if word not in stoplist]  for document in alltxts]
+corpusTest = [dictionary.doc2bow(text) for text in texts]
+
+
+
+vecteursTest = mtutils.corpus2csc(corpusTest, num_terms=len(dictionary), num_docs=nblignesTest)
+labelsTest = labs
+
+vecteursTest = vecteursTest.T
+
+predicted = classifier.predict(vecteursTest)
+
+
+#print to file
+f = open("res.txt","w")
+
+for label in predicted:
+    if label == -1:
+        f.write("M\n")
+    else:
+        f.write("C\n")
+
+f.close()
 
 
 
